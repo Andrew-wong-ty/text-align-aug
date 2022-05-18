@@ -1,0 +1,8 @@
+*.jpg
+*.log
+*.zip
+*.json
+*.ipynb
+*.pyc
+/data/train2017
+/data/annotations
