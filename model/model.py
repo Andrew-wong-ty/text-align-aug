@@ -77,7 +77,7 @@ class ALIGN(nn.Module):
         text_embeds = text_embeds[0]
         return text_embeds
 
-    @torch.no_grad()  # we do not train the VIT
+    # @torch.no_grad()  # we do not train the VIT
     def get_img_embeds(self,images):
         return self.visual_encoder(images)
 
@@ -85,6 +85,10 @@ class ALIGN(nn.Module):
         text_embeds = self.get_text_embeds(texts)  # h(t)
         img_embeds = self.get_img_embeds(images) # g(I), with shape (bs,max-len,d_model)
         img_embeds_aug = self.get_img_embeds(images_aug) # g(I_rot)
+        # normalize them
+        # text_embeds = F.normalize(text_embeds,dim=-1)
+        # img_embeds = F.normalize(img_embeds,dim=-1)
+        # img_embeds_aug = F.normalize(img_embeds_aug,dim=-1)
         ## tranform the img_embeds to be the same dimension as text_embeds
         # transform g(I)
         img_embeds = img_embeds.permute(0,2,1) 
@@ -92,10 +96,7 @@ class ALIGN(nn.Module):
         # transform g(I_rot)
         img_embeds_aug = img_embeds_aug.permute(0,2,1) 
         img_embeds_aug = self.W_image(img_embeds_aug).permute(0,2,1)
-        # normalize them
-        text_embeds = F.normalize(text_embeds,-1)
-        img_embeds = F.normalize(img_embeds,-1)
-        img_embeds_aug = F.normalize(img_embeds_aug,-1)
+        
 
         ## align h(t) and g(I)
         # calculate CLoss of text_embeds and img_embeds
@@ -109,5 +110,5 @@ class ALIGN(nn.Module):
                     +
                     self.CLoss(img_embeds,trans_img_embeds))/2
 
-        debug_stop = 1
+        return closs_text_img,closs_aug
         
