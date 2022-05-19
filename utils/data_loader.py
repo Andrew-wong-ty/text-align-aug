@@ -33,12 +33,19 @@ class textImageDataset(data.Dataset):
         """
         self.dataJson = dataJson
         self.transform = transform
+        self.common_transoform = transforms.Compose([ 
+                                transforms.Resize([256,256]), 
+                                transforms.ToTensor(),  
+                                transforms.Normalize([0.485,0.456,0.406],
+                                                    [0.229,0.224,0.225])  
+                            ])
     def __getitem__(self, index):
         image_path = self.dataJson[index]['image']
         image = Image.open(image_path).convert('RGB')
-        image = self.transform(image)
+        image_aug = self.transform(image)
+        image_normal = self.common_transoform(image)
         text = self.dataJson[index]['caption']
-        return {'images':image, 'captions':text}
+        return {'images':image_normal,'images_aug':image_aug, 'captions':text}
     def __len__(self):
         return len(self.dataJson)
 

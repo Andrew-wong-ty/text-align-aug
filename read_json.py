@@ -1,5 +1,6 @@
-from fileinput import filename
+from tqdm import tqdm  
 import json
+import numpy as np
 import os
 
 json_path = "./data/annotations/captions_train2017.json"
@@ -13,17 +14,23 @@ def get_file_name(img_id,img_id_len=12):
     filename = "".join(["0" for i in range(img_id_len-len(str_img_id))])+str_img_id+".jpg"
     return filename
 test_jsons = [] # 用于存储图像数据, key有2个 {'image': 图像的路径, 'caption': 图像的caption的text}
-for item in annotations[:1000]:
+lens = []
+for item in tqdm(annotations[:]):
     file_name = get_file_name(item['image_id'])
     caption = item['caption']
+    lens.append(len(caption.split()))
     path = os.path.join(img_path,file_name)
     text_img_pair = {'image':path,'caption':caption}
     test_jsons.append(text_img_pair)
     assert os.path.exists(path)
 
 # 保存1000个小样本来作为测试训练数据
-with open("/home/tywang/myURE/text-align-aug/data/samples.json","w") as file:
-    json.dump(test_jsons,file)
+# with open("/home/tywang/myURE/text-align-aug/data/all.json","w") as file:
+#     json.dump(test_jsons,file)
+print(np.mean(lens)) # 10
+
+print(max(lens)) # 49
+print(np.median(lens))  # maxlength 求32就ok了
 debug_stop =1
 
 
