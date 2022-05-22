@@ -1,12 +1,31 @@
 import torch
+from torch import Tensor
 from .vit import VisionTransformer, interpolate_pos_embed
 import torchvision.transforms as transforms
 from sentence_transformers import SentenceTransformer
 from functools import partial
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
+class PositionalEncoding(nn.Module):
+    def __init__(self,
+                 emb_size: int,
+                 dropout: float,
+                 maxlen: int = 5000):
+        super(PositionalEncoding, self).__init__()
+        den = torch.exp(- torch.arange(0, emb_size, 2)* math.log(10000) / emb_size)
+        pos = torch.arange(0, maxlen).reshape(maxlen, 1)
+        pos_embedding = torch.zeros((maxlen, emb_size))
+        pos_embedding[:, 0::2] = torch.sin(pos * den)
+        pos_embedding[:, 1::2] = torch.cos(pos * den)
+        pos_embedding = pos_embedding.unsqueeze(0)
 
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer('pos_embedding', pos_embedding)
+
+    def forward(self, token_embedding: Tensor):
+        return self.dropout(token_embedding + self.pos_embedding[:,:token_embedding.size(1), :])
 
 class ContrastiveLoss(nn.Module):
     """
@@ -61,34 +80,66 @@ class ALIGN(nn.Module):
         # W_image is used to scale g(I) to have the same dimension with h(T)
         self.W_image = nn.Linear(state_dict['pos_embed'].shape[1],self.args.max_len) 
         self.W_rot = nn.Linear(self.text_embed_dim,self.text_embed_dim)
+        transformer_decoder_layer = nn.TransformerDecoderLayer(self.text_embed_dim, args.n_head, self.text_embed_dim, 0.1,batch_first=True)
+        decoder_norm = nn.LayerNorm(self.text_embed_dim)
+        self.transformer_decoder = nn.TransformerDecoder(transformer_decoder_layer, args.num_decoder_layers,norm=decoder_norm)
+        self.generate = nn.Linear(self.text_embed_dim,len(self.tokenizer)) # project embedding_dim to vocabulary size
 
         # definition of loss
         self.CLoss = ContrastiveLoss(temp = args.temp)
+        self.CEloss = nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_token_id)
 
-    def get_text_embeds(self,texts):
-        text_output_m= self.tokenizer.batch_encode_plus(texts, 
+        # others
+        self.position_encoder = PositionalEncoding(self.text_embed_dim,0.1)
+
+
+    def tokenize(self,texts,mode):
+        """Tokenize a batch of texts
+            Args:
+                text: List[str]
+                mode: choice in `['all','first','last']`
+                      'all': tokenize the whole sentence,
+                      'first': tokenize the first n-1 words in the sentence
+                      'last': tokenize the last n-1 words in a sentence
+
+        """
+        assert mode in ['all','first','last']
+        text_tokenization= self.tokenizer.batch_encode_plus(texts, 
                                                     max_length=self.args.max_len,  # +2是因为CLS 和SEQ也算进去max_length的
                                                     return_tensors='pt', 
                                                     padding='max_length',
-                                                    truncation=True)
-        for k,_ in text_output_m.items():
-            text_output_m[k] = text_output_m[k].to(self.args.device)
-        text_embeds = self.sentbert.forward(**text_output_m)
+                                                    truncation=True)  
+        for k,_ in text_tokenization.items():
+            if mode == 'first':
+                text_tokenization[k] = text_tokenization[k][:,:-1].to(self.args.device)
+            elif mode == 'last':
+                text_tokenization[k] = text_tokenization[k][:,1:].to(self.args.device)
+            else:
+                text_tokenization[k] = text_tokenization[k].to(self.args.device)
+        return text_tokenization
+        
+    def get_text_embeds(self,text_tokenization):
+        """
+            input_ids: [CLS] xxx [SEP] [PAD]..[PAD]
+            token_type_ids: 全0
+            attention_mask: 1..10..0 [PAD]的地方就是0
+        """
+        text_embeds = self.sentbert.forward(**text_tokenization)
         text_embeds = text_embeds[0]
         return text_embeds
 
-    # @torch.no_grad()  # we do not train the VIT
+    @torch.no_grad()  # we do not train the VIT
     def get_img_embeds(self,images):
         return self.visual_encoder(images)
 
     def forward(self,texts,images,images_aug):
-        text_embeds = self.get_text_embeds(texts)  # h(t)
-        img_embeds = self.get_img_embeds(images) # g(I), with shape (bs,max-len,d_model)
-        img_embeds_aug = self.get_img_embeds(images_aug) # g(I_rot)
+        text_embedding = self.get_text_embeds(self.tokenize(texts,mode='all'))  # h(t)
+        img_embedding = self.get_img_embeds(images) # g(I), with shape (bs,max-len,d_model)
+        img_embedding_aug = self.get_img_embeds(images_aug) # g(I_rot)
         # normalize them
-        # text_embeds = F.normalize(text_embeds,dim=-1)
-        # img_embeds = F.normalize(img_embeds,dim=-1)
-        # img_embeds_aug = F.normalize(img_embeds_aug,dim=-1)
+        text_embeds = F.normalize(text_embedding,dim=-1)
+        img_embeds = F.normalize(img_embedding,dim=-1)
+        img_embeds_aug = F.normalize(img_embedding_aug,dim=-1)
         ## tranform the img_embeds to be the same dimension as text_embeds
         # transform g(I)
         img_embeds = img_embeds.permute(0,2,1) 
@@ -110,5 +161,42 @@ class ALIGN(nn.Module):
                     +
                     self.CLoss(img_embeds,trans_img_embeds))/2
 
-        return closs_text_img,closs_aug
+        ## decode
+        tgt_input = self.tokenize(texts,mode='first')
+        tgt_output = self.tokenize(texts,mode='last').data['input_ids']
         
+        tgt = self.get_text_embeds(tgt_input) # the embedding of the first n-1 words
+        tgt = self.position_encoder.forward(tgt)
+
+        tgt_mask, tgt_padding_mask = create_mask(self.args,tgt_input.data['input_ids'],self.tokenizer.pad_token_id)
+
+        output = self.transformer_decoder.forward(
+            tgt=tgt,
+            memory=trans_img_embeds,
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=tgt_padding_mask
+        )
+        logits = self.generate(output)
+        celoss = self.CEloss(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)) 
+
+        return closs_text_img,closs_aug,celoss
+
+
+
+
+def generate_square_subsequent_mask(args,sz):
+    mask = (torch.triu(torch.ones((sz, sz), device=args.device)) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
+
+
+def create_mask(args,tgt,PAD_IDX):
+    # src_seq_len = src.shape[1]
+    tgt_seq_len = tgt.shape[1]
+
+    tgt_mask = generate_square_subsequent_mask(args,tgt_seq_len)
+    # src_mask = torch.zeros((src_seq_len, src_seq_len),device=args.device).type(torch.bool)
+
+    tgt_padding_mask = (tgt == PAD_IDX)
+    return tgt_mask, tgt_padding_mask
+

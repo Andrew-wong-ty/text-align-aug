@@ -20,7 +20,7 @@ def set_global_random_seed(seed):
 def save(obj,path_name):
     try:
         with open(path_name,'wb') as file:
-            print("save to:",path_name)
+            # print("save to:",path_name)
             pickle.dump(obj,file)
     except  IOError as ioerror:
         print(ioerror)

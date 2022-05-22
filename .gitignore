@@ -4,5 +4,7 @@
 *.json
 *.ipynb
 *.pyc
+*.pkl
+seq2seq.py
 /data/train2017
 /data/annotations

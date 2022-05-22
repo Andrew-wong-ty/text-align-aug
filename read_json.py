@@ -17,7 +17,8 @@ def get_file_name(img_id,img_id_len=12):
 test_jsons = [] # 用于存储图像数据, key有2个 {'image': 图像的路径, 'caption': 图像的caption的text}
 lens = []
 random.shuffle(annotations)
-for item in tqdm(annotations[:50000]):
+print(len(annotations))
+for item in tqdm(annotations[:60000]):
     file_name = get_file_name(item['image_id'])
     caption = item['caption']
     lens.append(len(caption.split()))
@@ -27,8 +28,8 @@ for item in tqdm(annotations[:50000]):
     assert os.path.exists(path)
 
 #保存1000个小样本来作为测试训练数据
-with open("/home/tywang/myURE/text-align-aug/data/samples_50000.json","w") as file:
-    json.dump(test_jsons,file)
+# with open("/home/tywang/myURE/text-align-aug/data/samples_50000.json","w") as file:
+#     json.dump(test_jsons,file)
 print(np.mean(lens)) # 10
 
 print(max(lens)) # 49
