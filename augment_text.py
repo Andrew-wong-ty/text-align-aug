@@ -17,29 +17,14 @@ import copy
 import shutil
 import json
 
-"""
-一些模型
-1. fix住了VIT, 使用MSE作为loss的模型:  /data/tywang/vision_translation/catr_ckpt/ckpt_T06-27-11_44_41_epo7.pth
-1.1 fix VIT, 使用CLoss /data/tywang/vision_translation/catr_ckpt/ckpt_T06-28-11_53_21_epo7.pth
-2. 没fixVIT, 使用MSE作为对齐loss的模型
-3. 没fix VIT, 使用CLoss作为对齐loss的模型
-4. 全程: 黑白aug: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-29-15_34_38_epo4.pth
-4.1 全程: 中心cap: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-29-15_40_00_epo4.pth
-5. dual: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-30-12_06_08_epo8.pth
-6. MAE: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-30-12_17_26_epo5.pth
-7.0 0.25  /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-12_23_26_epo5.pth
-7. 0.5 纠正 /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_50_38_epo5.pth
-8. 0.75纠正 /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_48_54_epo5.pth
-9. 1.0  /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-12_22_34_epo5.pth
 
-"""
 
-parser = argparse.ArgumentParser(description='Image Captioning')
-parser.add_argument('--path', type=str, help='path to image', default="/home/tywang/myURE/image_samples/black.jpg")  # women_ski  group_people
-parser.add_argument('--checkpoint', type=str, help='checkpoint path', default="/data/tywang/vision_translation/catr_ckpt/ckpt_T06-30-12_06_08_epo8.pth")
+parser = argparse.ArgumentParser(description='text augmentation via vision translation')
+parser.add_argument('--checkpoint', type=str, help='checkpoint path', default="/data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_48_54_epo5.pth")
+parser.add_argument('--coco_val_path', type=str, help='the path of captions_val2017.json', default="/home/tywang/myURE/text-align-aug/data/annotations/captions_val2017.json")
 args = parser.parse_args()
-image_path = args.path
 checkpoint_path = args.checkpoint
+coco_val_path = args.coco_val_path
 
 config = Config()
 device = torch.device("cuda:0")
@@ -122,7 +107,7 @@ def get_augs(text,info=""):
     return result
 
 # 打开captions_val2017.json, 获取里面的caption的augmentation
-with open("/home/tywang/myURE/text-align-aug/data/annotations/captions_val2017.json",'r') as file:
+with open(coco_val_path,'r') as file:
     data = json.load(file)
     annotations = data['annotations']
 

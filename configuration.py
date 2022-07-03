@@ -24,7 +24,7 @@ class Config(object):
 
         
         # Basic
-        self.device = 'cuda:1'
+        self.device = 'cuda:0'
         self.seed = 42
         self.batch_size = 32
         self.num_workers = 8

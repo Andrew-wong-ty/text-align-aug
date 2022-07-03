@@ -10,7 +10,7 @@ __pycache__
 
 # C extensions
 *.so
-
+predict_caption.py
 # Distribution / packaging
 .Python
 build/
