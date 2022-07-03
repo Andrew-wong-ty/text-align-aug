@@ -10,6 +10,49 @@ import numpy as np
 import transformers
 
 
+
+def create_caption_and_mask(start_token, max_length, bs=1):
+    caption_template = torch.zeros((bs, max_length), dtype=torch.long)
+    mask_template = torch.ones((bs, max_length), dtype=torch.bool)  
+
+    caption_template[:, 0] = start_token
+    mask_template[:, 0] = False  
+
+    return caption_template, mask_template
+
+def process(image_id):
+    # 根据caption的图像id得到图像path
+    val = str(image_id).zfill(12)
+    return val + '.jpg'
+
+
+def find_first(x, element, dim: int = 1):
+    """Find the first occurence of element in x along a given dimension.
+
+    Args:
+        x: The input tensor to be searched.
+        element: The number to look for.
+        dim: The dimension to reduce.
+
+    Returns:
+        Indices of the first occurence of the element in x. If not found, return the
+        length of x along dim.
+
+    Usage:
+        >>> first_element(Tensor([[1, 2, 3], [2, 3, 3], [1, 1, 1]]), 3)
+        tensor([2, 1, 3])
+
+    Reference:
+        https://discuss.pytorch.org/t/first-nonzero-index/24769/9
+
+        I fixed an edge case where the element we are looking for is at index 0. The
+        original algorithm will return the length of x instead of 0.
+    """
+    mask = x == element
+    found, indices = ((mask.cumsum(dim) == 1) & mask).max(dim)
+    indices[(~found) & (indices == 0)] = x.shape[dim]
+    return indices
+
 def set_global_random_seed(seed):
     """to fix the random seed
 
