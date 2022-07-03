@@ -30,7 +30,6 @@ $ python main.py
 
 
 ## Testing (Get text augmentation)
-To test CATR with your own images.
 ```
 $ python augment_text.py --checkpoint aFullCheckPointPath  
                          --coco_val_path theFullPathOf[annotations/captions_val2017.json]
