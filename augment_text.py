@@ -7,7 +7,7 @@ from transformers import ViTFeatureExtractor
 from sentence_transformers import SentenceTransformer
 import argparse
 import torchvision as tv
-
+import  nltk.translate.bleu_score as bleu
 from models import caption
 from models.utils import save,load,find_first,create_caption_and_mask,process
 from datasets import coco, utils
@@ -17,11 +17,37 @@ import copy
 import shutil
 import json
 from typing import List
+from torchmetrics.text.bert import BERTScore
+import numpy as np
+
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 
+
+"""
+
+一些模型
+1. fix住了VIT, 使用MSE作为loss的模型:  /data/tywang/vision_translation/catr_ckpt/ckpt_T06-27-11_44_41_epo7.pth
+1.1 fix VIT, 使用CLoss /data/tywang/vision_translation/catr_ckpt/ckpt_T06-28-11_53_21_epo7.pth
+2. 没fixVIT, 使用MSE作为对齐loss的模型
+3. 没fix VIT, 使用CLoss作为对齐loss的模型
+4. 全程: 黑白aug: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-29-15_34_38_epo4.pth
+4.1 全程: 中心cap: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-29-15_40_00_epo4.pth
+5. dual: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-30-12_06_08_epo8.pth
+6. MAE: /data/tywang/vision_translation/catr_ckpt/ckpt_T06-30-12_17_26_epo5.pth
+7.0 0.25  /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-12_23_26_epo9.pth
+7. 0.5 纠正 /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_50_38_epo5.pth
+8. 0.75纠正 /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_48_54_epo5.pth
+9. 1.0  /data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-12_22_34_epo6.pth
+10. 一直res /data/tywang/vision_translation/catr_ckpt/ckpt_T07-05-10_05_00_bestModel.pth
+11 2pretrain再加res /data/tywang/vision_translation/catr_ckpt/ckpt_T07-05-10_15_34_bestModel.pth
+12. CL loss fixed bug: /data/tywang/vision_translation/catr_ckpt/ckpt_T07-09-11_48_16_bestModel.pth
+
+CL 0.07 crop0.25 /data/tywang/vision_translation/catr_ckpt/ckpt_T07-04-01_04_48_bestModel.pth
+"""
 
 parser = argparse.ArgumentParser(description='text augmentation via vision translation')
-parser.add_argument('--checkpoint', type=str, help='checkpoint path', default="/data/tywang/vision_translation/catr_ckpt/ckpt_T07-01-01_48_54_epo5.pth")
+parser.add_argument('--checkpoint', type=str, help='checkpoint path', default="/data/tywang/vision_translation/catr_ckpt/ckpt_T07-09-11_48_16_bestModel.pth")
 parser.add_argument('--coco_val_path', type=str, help='the path of captions_val2017.json', default="/home/tywang/myURE/text-align-aug/data/annotations/captions_val2017.json")
 args = parser.parse_args()
 checkpoint_path = args.checkpoint
@@ -93,16 +119,37 @@ with open(coco_val_path,'r') as file:
 
 generated_texts = {
         "origin":[],
-        "augmentation":[]
+        "augmentation":[],
+        "score":[]
     }
+# using BERTscore for evaluation
+bertscore = BERTScore(model_name_or_path="/data/transformers/bert-base-uncased",device=device)
+batch_size = 64
+start = 9999
+end = start+100
+index = list(range(start,end))
+n_split = np.ceil(len(index)/batch_size).astype(int)
 
-generated_texts['origin'] = [item['caption'] for item in annotations[9999:9999+50]]
-generated_texts['augmentation'] = get_augs_multiple(generated_texts['origin'],tokenizer)
+#temp = get_augs_multiple(['We went to the lake, because a shark had been seen at the ocean beach, so it was a safer place to swim.'],tokenizer)
 
-for idx, (ori,aug) in enumerate(zip(generated_texts['origin'],generated_texts['augmentation'])):
-    print("| ",idx," | ",ori," | ",aug.capitalize()," |")
+for i in tqdm(range(n_split)):
+    origin = [item['caption'] for item in annotations[start+i*batch_size:min(start+(i+1)*batch_size,end)]]
+    augmentations = get_augs_multiple(origin,tokenizer)
+    scores = bertscore(origin, augmentations)['f1']
+    generated_texts['score'].extend(scores)
+    generated_texts['origin'].extend(origin)
+    generated_texts['augmentation'].extend(augmentations)
 
-# save(generated_texts,"/home/tywang/myURE/vision_translate_align_bert/save_data/aug_701_Dual.pkl")
+# generated_texts['origin'] = [item['caption'] for item in annotations[9999:9999+1000]]
+# generated_texts['augmentation'] = get_augs_multiple(generated_texts['origin'],tokenizer)
+
+
+# generated_texts['score'] = 
+
+for idx, (ori,aug,sco) in enumerate(zip(generated_texts['origin'],generated_texts['augmentation'],generated_texts['score'] )):
+    print("| ",idx," | ",ori," | ",aug.capitalize()," |",sco)
+print("avg_score: ",np.mean(generated_texts['score']))
+#save(generated_texts,"/home/tywang/myURE/vision_translate_align_bert/save_data/aug_710_CL_S{:.3f}.pkl".format(np.mean(generated_texts['score'])))
 
 
 

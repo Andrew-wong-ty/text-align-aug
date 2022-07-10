@@ -6,6 +6,8 @@ import time
 import sys
 import os
 import time
+
+from tqdm import tqdm
 TIME=time.strftime("%m-%d-%H_%M_%S", time.localtime())
 print(TIME)
 from models import utils, caption
@@ -60,6 +62,7 @@ def main(config):
                                  sampler=sampler_val, drop_last=False, num_workers=config.num_workers)
 
 
+
     # 载入checkpoint
     if os.path.exists(config.checkpoint):
         print("Loading Checkpoint...")
@@ -72,21 +75,28 @@ def main(config):
     print("Start Training..")
     base_dev_loss = 1e10
     for epoch in range(config.start_epoch, config.epochs):
-        model_save_path = os.path.join(config.checkpoint_save_folder,"ckpt_T{}_epo{}.pth".format(TIME,epoch+1))
+        model_save_path = os.path.join(config.checkpoint_save_folder,"ckpt_T{}_bestModel.pth".format(TIME))
+        if epoch+1==config.pretrain_epochs:
+            model_save_path = os.path.join(config.checkpoint_save_folder,"ckpt_T{}_bestModel_pretrain{}.pth".format(TIME,epoch))
         print(model_save_path)
         config.checkpoint = model_save_path
         print(f"Epoch: {epoch}")
+        # ## 实验: caption x2 +(残差+MSE)
+        # if epoch>=config.pretrain_epochs:
+        #     model.config.use_res = True
+
         epoch_loss = train_one_epoch(
             config,model, CEloss,CLoss, data_loader_train, optimizer, device, epoch, config.clip_max_norm)
+
         lr_scheduler.step()
         print(f"Training Loss: {epoch_loss}")
 
         
-
+        # TODO: 记得unannotate
         validation_loss = evaluate(config,model, CEloss,CLoss, data_loader_val, device)
 
         # 保存模型
-        if validation_loss<base_dev_loss:
+        if validation_loss<base_dev_loss or epoch+1==config.pretrain_epochs:
             base_dev_loss = validation_loss
             print("Save the best model!")
             torch.save({

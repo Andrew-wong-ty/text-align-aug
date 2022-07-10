@@ -2,12 +2,14 @@ from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
 import torchvision as tv
 
-from PIL import Image
+from PIL import Image,ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 import numpy as np
 import random
 import os
 from transformers import ViTFeatureExtractor, ViTModel
 from transformers import BertTokenizer
+from models.utils import load
 
 from .utils import  read_json
 
@@ -64,15 +66,21 @@ class CocoCaption(Dataset):
         super().__init__()
 
         self.root = root
-        self.annot = [(self._process(val['image_id']), val['caption'])
-                      for val in ann['annotations']]
+        if config.dataset=="coco":
+            self.annot = [(self._process(val['image_id']), val['caption'])
+                        for val in ann['annotations']]
+        elif config.dataset=="cc12m":
+            self.annot = [(val['image'], val['caption'])
+                        for val in ann]
+        else:
+            raise NotImplementedError(f"{config.dataset} is not a valid dataset")
         if mode == 'validation':
             self.annot = self.annot
         if mode == 'training':
             self.annot = self.annot[: limit]
-        self.transform_aug = tv.transforms.Compose([ 
-                  tv.transforms.Grayscale(3), # 3 就是变成灰色
-            ])
+        # self.transform_aug = tv.transforms.Compose([ 
+        #           tv.transforms.Grayscale(3), # 3 就是变成灰色
+        #     ])
         # 加载图像的feature_extractor
         self.feature_extractor = ViTFeatureExtractor.from_pretrained(config.backbone)
         print("feature_extractor:",self.feature_extractor)
@@ -89,7 +97,12 @@ class CocoCaption(Dataset):
 
     def __getitem__(self, idx):
         image_id, caption = self.annot[idx]
-        image = Image.open(os.path.join(self.root, image_id)).convert('RGB')
+        try:
+            image = Image.open(os.path.join(self.root, image_id)).convert('RGB')
+        except:
+            print(image_id)
+            image_id, caption = self.annot[idx+1]
+            image = Image.open(os.path.join(self.root, image_id)).convert('RGB')
         w,h = image.size
         min_shape = int(min(w,h)*0.25)  
         transform_aug_centerCrop = tv.transforms.Compose([ 
@@ -108,25 +121,43 @@ class CocoCaption(Dataset):
             1 - np.array(caption_encoded['attention_mask'])).astype(bool)  # padding mask
 
 
-        return image,image_aug, caption, cap_mask,np.array(caption_encoded['attention_mask']) 
+        return image,image_aug, caption, cap_mask,np.array(caption_encoded['attention_mask'])
 
 
 def build_dataset(config, mode='training'):
-    if mode == 'training':
-        train_dir = os.path.join(config.dir, 'train2017')
-        train_file = os.path.join(
-            config.dir, 'annotations', 'captions_train2017.json')
-        data = CocoCaption(config,train_dir, read_json(
-            train_file), max_length=config.max_position_embeddings, limit=config.limit,  mode='training')
-        return data
+    if config.dataset == "coco":
+        if mode == 'training':
+            train_dir = os.path.join(config.dir, 'train2017')
+            train_file = os.path.join(
+                config.dir, 'annotations', 'captions_train2017.json')
+            data = CocoCaption(config,train_dir, read_json(
+                train_file), max_length=config.max_position_embeddings, limit=config.limit,  mode='training')
+            return data
 
-    elif mode == 'validation':
-        val_dir = os.path.join(config.dir, 'val2017')
-        val_file = os.path.join(
-            config.dir, 'annotations', 'captions_val2017.json')
-        data = CocoCaption(config,val_dir, read_json(
-            val_file), max_length=config.max_position_embeddings, limit=config.limit,  mode='validation')
-        return data
+        elif mode == 'validation':
+            val_dir = os.path.join(config.dir, 'val2017')
+            val_file = os.path.join(
+                config.dir, 'annotations', 'captions_val2017.json')
+            data = CocoCaption(config,val_dir, read_json(
+                val_file), max_length=config.max_position_embeddings, limit=config.limit,  mode='validation')
+            return data
 
+        else:
+            raise NotImplementedError(f"{mode} not supported")
+    elif config.dataset == "cc12m":
+        if mode == 'training':
+            train_file = load(config.train_annotation_path)
+            data = CocoCaption(config,config.image_folder, 
+                train_file, max_length=config.max_position_embeddings, limit=config.limit,  mode='training')
+            return data
+
+        elif mode == 'validation':
+            val_file = load(config.dev_annotation_path)
+            data = CocoCaption(config,config.image_folder, 
+                val_file, max_length=config.max_position_embeddings, limit=config.limit,  mode='validation')
+            return data
+
+        else:
+            raise NotImplementedError(f"{mode} not supported")
     else:
-        raise NotImplementedError(f"{mode} not supported")
+        raise NotImplementedError(f"{config.dataset} is not a valid dataset")

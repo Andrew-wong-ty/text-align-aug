@@ -45,7 +45,8 @@ pip-delete-this-directory.txt
 checkpoints
 logs
 # Unit test / coverage reports
-save_data/
+save_data
+temp_to_read_dataset
 htmlcov/
 .tox/
 .nox/

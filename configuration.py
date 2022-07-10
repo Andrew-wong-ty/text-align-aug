@@ -1,4 +1,6 @@
 import time
+
+import datasets
 class Config(object):
     def __init__(self):
 
@@ -8,7 +10,7 @@ class Config(object):
 
         # Epochs
         self.epochs = 30
-        self.pretrain_epochs = 2 # 用caption任务来进行预训练
+        self.pretrain_epochs = 1 # 用caption任务来进行预训练
         self.lr_drop = 1
         self.start_epoch = 0
         self.weight_decay = 1e-4
@@ -21,6 +23,7 @@ class Config(object):
         # '/data/tywang/vision_transformer/google_vit-base-patch16-224'
         self.backbone = '/data/tywang/vision_transformer/google_vit-base-patch16-224' # huggingface的 vit 的路径
         self.dual_model = False  # 是否使用VisionTextDualEncoder
+        self.use_res = False # 是否使用残差
 
         
         # Basic
@@ -47,14 +50,19 @@ class Config(object):
         self.pre_norm = True
 
         # Dataset
-        # self.dir 下要有从coco数据集下载得到的 annotations/  train2017/  val2017/ 三个文件夹
-        self.dir = '/home/tywang/myURE/text-align-aug/data'
+        self.dataset = "cc12m"  # choice in ['cc12m','coco']
+        if self.dataset=="cc12m":
+            self.image_folder = "/data/tywang/dataset/CC12M/small_try"  # 所有的图片都存放在这个文件夹
+            self.train_annotation_path = "/data/tywang/dataset/CC12M/CC12M_train.pkl"  # image folder 对应的标注文件, List[{'caption':str,'image':str}]
+            self.dev_annotation_path = "/data/tywang/dataset/CC12M/CC12M_dev.pkl"  # image folder 对应的标注文件, List[{'caption':str,'image':str}]
+        elif self.dataset=="coco":
+            self.dir = '/home/tywang/myURE/text-align-aug/data' # self.dir 下要有从coco数据集下载得到的 annotations/  train2017/  val2017/ 三个文件夹
         self.checkpoint_save_folder = "/data/tywang/vision_translation/catr_ckpt"
         self.limit = -1
 
 
         # loss
-        self.temp = 0.1  # contrastive loss的参数
+        self.temp = 0.9  # contrastive loss的参数
     def __str__(self) -> str:
         # 打印所有的参数
         attrs = vars(self)
