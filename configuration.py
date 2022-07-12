@@ -10,7 +10,7 @@ class Config(object):
 
         # Epochs
         self.epochs = 30
-        self.pretrain_epochs = 1 # 用caption任务来进行预训练
+        self.pretrain_epochs = 0 # 用caption任务来进行预训练
         self.lr_drop = 1
         self.start_epoch = 0
         self.weight_decay = 1e-4
@@ -23,11 +23,11 @@ class Config(object):
         # '/data/tywang/vision_transformer/google_vit-base-patch16-224'
         self.backbone = '/data/tywang/vision_transformer/google_vit-base-patch16-224' # huggingface的 vit 的路径
         self.dual_model = False  # 是否使用VisionTextDualEncoder
-        self.use_res = False # 是否使用残差
+        self.use_res = True # 是否使用残差
 
         
         # Basic
-        self.device = 'cuda:0'
+        self.device = 'cuda:2'
         self.seed = 42
         self.batch_size = 32
         self.num_workers = 8
@@ -48,6 +48,13 @@ class Config(object):
         self.dim_feedforward = 2048
         self.nheads = 8
         self.pre_norm = True
+
+        # Wang
+        self.waug_nheads = 6
+        self.project = False
+
+        # image augmentation
+        self.centerCrop_ratio = 0.5
 
         # Dataset
         self.dataset = "cc12m"  # choice in ['cc12m','coco']

@@ -84,7 +84,7 @@ def train_one_epoch(config,model:Caption, criterion_celoss,criterion_closs, data
                 print(f'Loss is {loss.item()}, stopping training')
                 sys.exit(1)
 
-            info = "[{}/{}] train_loss: {:.4f}  celoss: {:.4f} bert_vit_align_loss: {:.2f} img_aug_align_loss: {:.2f} dual_closs: {:.4f}".format(idx+1,total,
+            info = "[{}/{}] train_loss: {:.4f}  celoss: {:.4f} bert_vit_align_loss: {:.4f} img_aug_align_loss: {:.4f} dual_closs: {:.4f}".format(idx+1,total,
                 epoch_loss/(idx+1),
                 text_celoss/(idx+1),
                 bert_vit_align_loss/(idx+1),

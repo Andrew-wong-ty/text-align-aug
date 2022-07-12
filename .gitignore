@@ -48,6 +48,7 @@ logs
 save_data
 temp_to_read_dataset
 htmlcov/
+temp
 .tox/
 .nox/
 .coverage

@@ -66,6 +66,7 @@ class CocoCaption(Dataset):
         super().__init__()
 
         self.root = root
+        self.config = config
         if config.dataset=="coco":
             self.annot = [(self._process(val['image_id']), val['caption'])
                         for val in ann['annotations']]
@@ -104,7 +105,7 @@ class CocoCaption(Dataset):
             image_id, caption = self.annot[idx+1]
             image = Image.open(os.path.join(self.root, image_id)).convert('RGB')
         w,h = image.size
-        min_shape = int(min(w,h)*0.25)  
+        min_shape = int(min(w,h)*self.config.centerCrop_ratio)  
         transform_aug_centerCrop = tv.transforms.Compose([ 
                tv.transforms.CenterCrop([min_shape,min_shape])
             ])
